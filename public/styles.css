@@ -1,0 +1,14 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #0b1020; color: #e6eaf2; font: 14px/1.5 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; }
+.wrap { max-width: 980px; margin: 24px auto; padding: 0 16px 40px; }
+h1 { margin: 0; }
+h2 { margin: 0 0 12px; font-size: 18px; }
+.muted { color: #9ba7c2; }
+.card { background: #121a31; border: 1px solid #273154; border-radius: 10px; padding: 16px; margin-top: 16px; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+input, button, .btn { border-radius: 8px; border: 1px solid #3c4a78; background: #0e1730; color: #e6eaf2; padding: 10px; }
+button, .btn { cursor: pointer; background: #1d3a8a; border-color: #2f54c4; text-decoration: none; display: inline-block; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+pre { white-space: pre-wrap; background: #0e1730; border-radius: 8px; padding: 10px; border: 1px solid #3c4a78; }
+table { width: 100%; border-collapse: collapse; }
+th, td { border-bottom: 1px solid #273154; text-align: left; padding: 8px; }

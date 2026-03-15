@@ -1,10 +1,11 @@
 # B2B 邮件自动化 MVP
 
-可运行成品（最小版）：
+可运行成品（最小可交付版）：
 - 线索接入 API
 - 自动邮件序列（3 步）
 - 退订链接
-- 周报统计 API
+- 周报统计 API + CSV 导出
+- 网页后台（线索录入 / 调度发送 / 数据查看）
 
 ## 1. 安装
 
@@ -22,39 +23,34 @@ cp .env.example .env
 npm run dev
 ```
 
-## 3. 导入线索
+打开：`http://localhost:3030`
 
-```bash
-curl -X POST http://localhost:3030/api/leads \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "name":"张三",
-    "email":"test@example.com",
-    "company":"示例公司",
-    "source":"wechat",
-    "tags":["B2B","trial"]
-  }'
+## 3. 自动调度（可选）
+
+在 `.env` 配：
+
+```env
+TICK_INTERVAL_SECONDS=300
 ```
 
-## 4. 执行发送调度（可用 cron 每 5-10 分钟调用）
+表示每 300 秒自动执行一次 `/api/tick`。
+
+## 4. 命令行演示（可选）
 
 ```bash
-curl -X POST http://localhost:3030/api/tick
+npm run demo
 ```
 
-## 5. 查看周报
+会自动：健康检查 -> 添加线索 -> 执行一次发送 -> 查询周报。
 
-```bash
-curl http://localhost:3030/api/report/weekly
-```
-
-## API 一览
+## 5. 常用接口
 
 - `GET /health`
 - `POST /api/leads`
 - `GET /api/leads`
 - `POST /api/tick`
 - `GET /api/report/weekly`
+- `GET /api/report/weekly.csv`
 - `GET /unsubscribe?token=...`
 
 ## 生产建议（下一步）

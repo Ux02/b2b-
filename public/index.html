@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>B2B 邮件自动化 MVP</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>B2B 邮件自动化 MVP</h1>
+    <p class="muted">线索录入 · 自动跟进 · 周报统计</p>
+
+    <section class="card">
+      <h2>新增线索</h2>
+      <form id="leadForm" class="grid">
+        <input name="name" placeholder="姓名" required />
+        <input name="email" type="email" placeholder="邮箱" required />
+        <input name="company" placeholder="公司" required />
+        <input name="source" placeholder="来源（如 wechat）" value="manual" />
+        <input name="tags" placeholder="标签（逗号分隔）" />
+        <button type="submit">添加线索</button>
+      </form>
+      <p id="formMsg" class="muted"></p>
+    </section>
+
+    <section class="card row">
+      <button id="tickBtn">立即执行一次发送调度</button>
+      <button id="refreshBtn">刷新数据</button>
+      <a class="btn" href="/api/report/weekly.csv" target="_blank">下载周报 CSV</a>
+    </section>
+
+    <section class="card">
+      <h2>周报（近 7 天）</h2>
+      <pre id="report"></pre>
+    </section>
+
+    <section class="card">
+      <h2>线索列表</h2>
+      <table>
+        <thead>
+          <tr><th>姓名</th><th>邮箱</th><th>公司</th><th>状态</th><th>已发送步数</th><th>来源</th></tr>
+        </thead>
+        <tbody id="leadsTable"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

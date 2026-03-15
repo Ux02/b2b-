@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import crypto from 'crypto';
+import path from 'path';
 import { readDb, writeDb, id } from './store.js';
 import { sequence, render } from './templates.js';
 import { sendMail } from './mailer.js';
@@ -11,6 +12,7 @@ app.use(express.json());
 const PORT = Number(process.env.PORT || 3030);
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 const APP_SECRET = process.env.APP_SECRET || 'replace_me';
+const TICK_INTERVAL_SECONDS = Number(process.env.TICK_INTERVAL_SECONDS || 0);
 
 function now() { return Date.now(); }
 
@@ -57,7 +59,7 @@ app.get('/api/leads', (_, res) => {
   res.json(db.leads);
 });
 
-app.post('/api/tick', async (_, res) => {
+async function runTick() {
   const db = readDb();
   const active = db.leads.filter(l => l.status === 'active' && l.nextSendAt <= now());
   let sent = 0;
@@ -109,7 +111,12 @@ app.post('/api/tick', async (_, res) => {
   }
 
   writeDb(db);
-  res.json({ ok: true, sent, dueLeads: active.length });
+  return { ok: true, sent, dueLeads: active.length };
+}
+
+app.post('/api/tick', async (_, res) => {
+  const result = await runTick();
+  res.json(result);
 });
 
 app.get('/unsubscribe', (req, res) => {
@@ -127,7 +134,7 @@ app.get('/unsubscribe', (req, res) => {
   res.send('你已退订，后续不会再收到跟进邮件。');
 });
 
-app.get('/api/report/weekly', (_, res) => {
+function buildWeeklyReport() {
   const db = readDb();
   const oneWeek = now() - 7 * 24 * 3600 * 1000;
   const leads = db.leads.filter(l => l.createdAt >= oneWeek).length;
@@ -135,7 +142,7 @@ app.get('/api/report/weekly', (_, res) => {
   const errors = db.emailLogs.filter(m => m.sentAt >= oneWeek && m.error).length;
   const unsubscribed = db.leads.filter(l => l.status === 'unsubscribed').length;
 
-  res.json({
+  return {
     period: '7d',
     leads,
     mails,
@@ -143,10 +150,41 @@ app.get('/api/report/weekly', (_, res) => {
     unsubscribed,
     activeLeads: db.leads.filter(l => l.status === 'active').length,
     doneLeads: db.leads.filter(l => l.status === 'done').length
-  });
+  };
+}
+
+app.get('/api/report/weekly', (_, res) => {
+  res.json(buildWeeklyReport());
 });
+
+app.get('/api/report/weekly.csv', (_, res) => {
+  const r = buildWeeklyReport();
+  const csv = [
+    'period,leads,mails,errors,unsubscribed,activeLeads,doneLeads',
+    `${r.period},${r.leads},${r.mails},${r.errors},${r.unsubscribed},${r.activeLeads},${r.doneLeads}`
+  ].join('\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="weekly-report.csv"');
+  res.send(csv);
+});
+
+app.use(express.static(path.resolve(process.cwd(), 'public')));
 
 app.listen(PORT, () => {
   console.log(`b2b-mail-mvp running on ${BASE_URL}`);
   console.log(`health: ${BASE_URL}/health`);
+  console.log(`dashboard: ${BASE_URL}`);
+  if (TICK_INTERVAL_SECONDS > 0) {
+    console.log(`auto tick enabled: every ${TICK_INTERVAL_SECONDS}s`);
+    setInterval(async () => {
+      try {
+        const r = await runTick();
+        if (r.sent > 0 || r.dueLeads > 0) {
+          console.log(`[tick] due=${r.dueLeads}, sent=${r.sent}`);
+        }
+      } catch (err) {
+        console.error('[tick] failed', err?.message || err);
+      }
+    }, TICK_INTERVAL_SECONDS * 1000);
+  }
 });
