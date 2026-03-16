@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "save:summary": "bash scripts/save-summary.sh",
+    "push:alerts": "bash scripts/push-alerts.sh"
   },
   "dependencies": {
     "dayjs": "^1.11.20",

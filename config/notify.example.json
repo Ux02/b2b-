@@ -1,0 +1,6 @@
+{
+  "enabled": false,
+  "provider": "feishu_webhook",
+  "webhookUrl": "https://open.feishu.cn/open-apis/bot/v2/hook/xxxx",
+  "onlyHigh": false
+}
