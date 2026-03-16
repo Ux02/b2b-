@@ -6,7 +6,8 @@ body {
   color: #e8ecf5;
 }
 .container { max-width: 1080px; margin: 0 auto; padding: 24px; }
-.header { display: flex; justify-content: space-between; align-items: center; }
+.header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.actions { display: flex; gap: 10px; }
 h1 { margin: 0; font-size: 28px; }
 h2 { margin-top: 0; font-size: 18px; }
 button {
@@ -17,6 +18,7 @@ button {
   padding: 10px 14px;
   cursor: pointer;
 }
+button:disabled { opacity: 0.65; cursor: not-allowed; }
 .time { color: #9fb0da; font-size: 14px; }
 .grid.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 .card {
@@ -45,3 +47,13 @@ pre {
 .log-item { border-top: 1px dashed #2a3762; padding: 10px 0; }
 .log-item:first-child { border-top: 0; }
 .log-title { color: #9fb0da; font-size: 13px; margin-bottom: 4px; }
+.alert {
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid transparent;
+  font-size: 14px;
+}
+.alert-high { background: #3a1320; border-color: #9a304f; color: #ffd7e1; }
+.alert-medium { background: #3a2a12; border-color: #8f6a2e; color: #ffe9bf; }
+.alert-ok { background: #123124; border-color: #2f835f; color: #cdf9e4; }

@@ -10,11 +10,24 @@
     <main class="container">
       <header class="header">
         <h1>个人工作驾驶舱</h1>
-        <button id="refreshBtn">刷新</button>
+        <div class="actions">
+          <button id="refreshBtn">刷新</button>
+          <button id="runBatchBtn">运行刷新批处理</button>
+        </div>
       </header>
       <p id="time" class="time"></p>
 
       <section class="grid cards" id="cards"></section>
+
+      <section class="panel">
+        <h2>告警面板</h2>
+        <div id="alerts"></div>
+      </section>
+
+      <section class="panel">
+        <h2>今日摘要</h2>
+        <pre id="summary"></pre>
+      </section>
 
       <section class="panel">
         <h2>Git 变更（前30条）</h2>

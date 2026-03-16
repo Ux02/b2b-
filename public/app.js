@@ -3,6 +3,9 @@ const gitEl = document.getElementById('git');
 const logsEl = document.getElementById('logs');
 const timeEl = document.getElementById('time');
 const refreshBtn = document.getElementById('refreshBtn');
+const runBatchBtn = document.getElementById('runBatchBtn');
+const alertsEl = document.getElementById('alerts');
+const summaryEl = document.getElementById('summary');
 
 function card(k, v) {
   return `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`;
@@ -25,6 +28,12 @@ async function load() {
   ].join('');
 
   gitEl.textContent = (data.git?.lines || []).join('\n') || '暂无变更';
+  summaryEl.textContent = data.summary || '暂无摘要';
+
+  const alerts = data.alerts || [];
+  alertsEl.innerHTML = alerts
+    .map((a) => `<div class="alert alert-${a.level}">${a.text}</div>`)
+    .join('');
 
   const logs = data.logs || [];
   logsEl.innerHTML = logs.length
@@ -41,6 +50,28 @@ async function load() {
     : '<div class="log-item">暂无日志</div>';
 }
 
+async function runBatchRefresh() {
+  runBatchBtn.disabled = true;
+  runBatchBtn.textContent = '执行中...';
+  try {
+    const r = await fetch('/api/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ script: 'runtime-refresh-batch.sh' })
+    });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error || '触发失败');
+    alert('刷新完成');
+    await load();
+  } catch (err) {
+    alert(`执行失败：${err.message || err}`);
+  } finally {
+    runBatchBtn.disabled = false;
+    runBatchBtn.textContent = '运行刷新批处理';
+  }
+}
+
 refreshBtn.addEventListener('click', load);
+runBatchBtn.addEventListener('click', runBatchRefresh);
 load();
 setInterval(load, 60000);

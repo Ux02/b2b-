@@ -9,7 +9,9 @@ const PORT = Number(process.env.PORT || 3090);
 const WORKSPACE = process.env.WORKSPACE_DIR || '/root/.openclaw/workspace';
 const MEMORY_DIR = path.join(WORKSPACE, 'memory');
 const LOGS_DIR = path.join(WORKSPACE, 'logs');
+const SCRIPTS_DIR = path.join(WORKSPACE, 'scripts');
 
+app.use(express.json());
 app.use(express.static(path.join(process.cwd(), 'public')));
 
 function safeRead(filePath) {
@@ -21,8 +23,13 @@ function safeRead(filePath) {
 }
 
 function tailLines(text, count = 30) {
-  const lines = String(text || '').trim().split('\n');
+  const lines = String(text || '').trim().split('\n').filter(Boolean);
   return lines.slice(-count);
+}
+
+function extractPercent(text) {
+  const m = String(text || '').match(/(\d+)%/);
+  return m ? Number(m[1]) : null;
 }
 
 function parseRuntime() {
@@ -43,6 +50,8 @@ function parseRuntime() {
     skills,
     codex5h,
     codexWeek,
+    codex5hPercent: extractPercent(codex5h),
+    codexWeekPercent: extractPercent(codexWeek),
     digestSnippet: tailLines(digest, 8).join('\n')
   };
 }
@@ -76,16 +85,83 @@ function getLogFeed() {
   });
 }
 
+function buildAlerts(runtime, logs, git) {
+  const alerts = [];
+  if (runtime.codex5hPercent !== null && runtime.codex5hPercent < 20) {
+    alerts.push({ level: 'high', text: `Codex 5h 额度偏低：${runtime.codex5hPercent}%` });
+  }
+  if (runtime.codexWeekPercent !== null && runtime.codexWeekPercent < 20) {
+    alerts.push({ level: 'high', text: `Codex 周额度偏低：${runtime.codexWeekPercent}%` });
+  }
+  if (git.count > 100) {
+    alerts.push({ level: 'medium', text: `工作区改动较多：${git.count} 条，建议拆批提交` });
+  }
+
+  const badKeywords = ['error', 'failed', 'fatal'];
+  const badLogs = logs.filter((l) => (l.tail || []).some((line) => badKeywords.some((k) => line.toLowerCase().includes(k))));
+  if (badLogs.length > 0) {
+    alerts.push({ level: 'medium', text: `最近日志出现异常关键词：${badLogs.map((x) => x.file).join(', ')}` });
+  }
+
+  if (alerts.length === 0) {
+    alerts.push({ level: 'ok', text: '当前未发现明显告警。' });
+  }
+  return alerts;
+}
+
+function buildDailySummary(runtime, git, logs) {
+  const topLog = logs[logs.length - 1];
+  const lines = [
+    `日期：${dayjs().format('YYYY-MM-DD')}`,
+    `- 当前分支：${runtime.gitBranch}`,
+    `- 工作区变更：${git.count} 条`,
+    `- 已装 skills：${runtime.skills}`,
+    `- Codex 5h：${runtime.codex5h}`,
+    `- Codex 周：${runtime.codexWeek}`,
+    `- 最近日志：${topLog ? `${topLog.file} (${topLog.updatedAt})` : '暂无'}`
+  ];
+
+  const risk = [];
+  if (runtime.codex5hPercent !== null && runtime.codex5hPercent < 20) risk.push('5h 额度偏低');
+  if (git.count > 100) risk.push('未提交改动偏多');
+  lines.push(`- 风险提示：${risk.length ? risk.join('；') : '无明显风险'}`);
+
+  return lines.join('\n');
+}
+
+function runScript(scriptName) {
+  const allowed = new Set(['runtime-refresh-batch.sh', 'project-state-refresh.sh']);
+  if (!allowed.has(scriptName)) throw new Error('script not allowed');
+  const full = path.join(SCRIPTS_DIR, scriptName);
+  if (!fs.existsSync(full)) throw new Error('script missing');
+  const out = execSync(`bash ${full}`, { cwd: WORKSPACE, encoding: 'utf-8' });
+  return out;
+}
+
 app.get('/api/overview', (_, res) => {
   const runtime = parseRuntime();
   const git = getGitStatus();
   const logs = getLogFeed();
+  const alerts = buildAlerts(runtime, logs, git);
+  const summary = buildDailySummary(runtime, git, logs);
   res.json({
     now: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     runtime,
     git,
-    logs
+    logs,
+    alerts,
+    summary
   });
+});
+
+app.post('/api/trigger', (req, res) => {
+  try {
+    const script = String(req.body?.script || '');
+    const output = runScript(script);
+    res.json({ ok: true, script, output: tailLines(output, 20).join('\n') });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || String(err) });
+  }
 });
 
 app.listen(PORT, () => {
