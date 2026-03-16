@@ -4,6 +4,7 @@ const logsEl = document.getElementById('logs');
 const timeEl = document.getElementById('time');
 const refreshBtn = document.getElementById('refreshBtn');
 const runBatchBtn = document.getElementById('runBatchBtn');
+const saveSummaryBtn = document.getElementById('saveSummaryBtn');
 const alertsEl = document.getElementById('alerts');
 const summaryEl = document.getElementById('summary');
 
@@ -71,7 +72,24 @@ async function runBatchRefresh() {
   }
 }
 
+async function saveSummary() {
+  saveSummaryBtn.disabled = true;
+  saveSummaryBtn.textContent = '保存中...';
+  try {
+    const r = await fetch('/api/summary/save', { method: 'POST' });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error || '保存失败');
+    alert(`已写入：${data.savedTo}`);
+  } catch (err) {
+    alert(`保存失败：${err.message || err}`);
+  } finally {
+    saveSummaryBtn.disabled = false;
+    saveSummaryBtn.textContent = '保存今日日报';
+  }
+}
+
 refreshBtn.addEventListener('click', load);
 runBatchBtn.addEventListener('click', runBatchRefresh);
+saveSummaryBtn.addEventListener('click', saveSummary);
 load();
 setInterval(load, 60000);

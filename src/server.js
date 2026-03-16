@@ -10,6 +10,7 @@ const WORKSPACE = process.env.WORKSPACE_DIR || '/root/.openclaw/workspace';
 const MEMORY_DIR = path.join(WORKSPACE, 'memory');
 const LOGS_DIR = path.join(WORKSPACE, 'logs');
 const SCRIPTS_DIR = path.join(WORKSPACE, 'scripts');
+const LOCAL_CONFIG = path.join(process.cwd(), 'config', 'alerts.json');
 
 app.use(express.json());
 app.use(express.static(path.join(process.cwd(), 'public')));
@@ -22,6 +23,14 @@ function safeRead(filePath) {
   }
 }
 
+function safeReadJson(filePath, fallback = {}) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  } catch {
+    return fallback;
+  }
+}
+
 function tailLines(text, count = 30) {
   const lines = String(text || '').trim().split('\n').filter(Boolean);
   return lines.slice(-count);
@@ -30,6 +39,16 @@ function tailLines(text, count = 30) {
 function extractPercent(text) {
   const m = String(text || '').match(/(\d+)%/);
   return m ? Number(m[1]) : null;
+}
+
+function loadAlertConfig() {
+  return {
+    codex5hLowPercent: 20,
+    codexWeekLowPercent: 20,
+    gitChangesHigh: 100,
+    errorKeywords: ['error', 'failed', 'fatal'],
+    ...safeReadJson(LOCAL_CONFIG, {})
+  };
 }
 
 function parseRuntime() {
@@ -85,20 +104,21 @@ function getLogFeed() {
   });
 }
 
-function buildAlerts(runtime, logs, git) {
+function buildAlerts(runtime, logs, git, cfg) {
   const alerts = [];
-  if (runtime.codex5hPercent !== null && runtime.codex5hPercent < 20) {
+  if (runtime.codex5hPercent !== null && runtime.codex5hPercent < cfg.codex5hLowPercent) {
     alerts.push({ level: 'high', text: `Codex 5h 额度偏低：${runtime.codex5hPercent}%` });
   }
-  if (runtime.codexWeekPercent !== null && runtime.codexWeekPercent < 20) {
+  if (runtime.codexWeekPercent !== null && runtime.codexWeekPercent < cfg.codexWeekLowPercent) {
     alerts.push({ level: 'high', text: `Codex 周额度偏低：${runtime.codexWeekPercent}%` });
   }
-  if (git.count > 100) {
+  if (git.count > cfg.gitChangesHigh) {
     alerts.push({ level: 'medium', text: `工作区改动较多：${git.count} 条，建议拆批提交` });
   }
 
-  const badKeywords = ['error', 'failed', 'fatal'];
-  const badLogs = logs.filter((l) => (l.tail || []).some((line) => badKeywords.some((k) => line.toLowerCase().includes(k))));
+  const badLogs = logs.filter((l) =>
+    (l.tail || []).some((line) => cfg.errorKeywords.some((k) => line.toLowerCase().includes(String(k).toLowerCase())))
+  );
   if (badLogs.length > 0) {
     alerts.push({ level: 'medium', text: `最近日志出现异常关键词：${badLogs.map((x) => x.file).join(', ')}` });
   }
@@ -138,11 +158,22 @@ function runScript(scriptName) {
   return out;
 }
 
+function appendDailySummary(summaryText) {
+  const date = dayjs().format('YYYY-MM-DD');
+  const file = path.join(MEMORY_DIR, `${date}.md`);
+  const stamp = dayjs().format('HH:mm:ss');
+  const block = `\n\n## Workbench 日报快照（${stamp}）\n${summaryText}\n`;
+  fs.mkdirSync(MEMORY_DIR, { recursive: true });
+  fs.appendFileSync(file, block, 'utf-8');
+  return file;
+}
+
 app.get('/api/overview', (_, res) => {
+  const cfg = loadAlertConfig();
   const runtime = parseRuntime();
   const git = getGitStatus();
   const logs = getLogFeed();
-  const alerts = buildAlerts(runtime, logs, git);
+  const alerts = buildAlerts(runtime, logs, git, cfg);
   const summary = buildDailySummary(runtime, git, logs);
   res.json({
     now: dayjs().format('YYYY-MM-DD HH:mm:ss'),
@@ -150,7 +181,8 @@ app.get('/api/overview', (_, res) => {
     git,
     logs,
     alerts,
-    summary
+    summary,
+    config: cfg
   });
 });
 
@@ -161,6 +193,19 @@ app.post('/api/trigger', (req, res) => {
     res.json({ ok: true, script, output: tailLines(output, 20).join('\n') });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message || String(err) });
+  }
+});
+
+app.post('/api/summary/save', (req, res) => {
+  try {
+    const runtime = parseRuntime();
+    const git = getGitStatus();
+    const logs = getLogFeed();
+    const summary = buildDailySummary(runtime, git, logs);
+    const savedTo = appendDailySummary(summary);
+    res.json({ ok: true, savedTo, summary });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message || String(err) });
   }
 });
 

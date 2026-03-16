@@ -1,0 +1,6 @@
+{
+  "codex5hLowPercent": 20,
+  "codexWeekLowPercent": 20,
+  "gitChangesHigh": 100,
+  "errorKeywords": ["error", "failed", "fatal"]
+}
