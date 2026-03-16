@@ -1,0 +1,14 @@
+{
+  "name": "workbench",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.20",
+    "express": "^5.2.1"
+  }
+}

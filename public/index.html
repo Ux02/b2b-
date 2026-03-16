@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>个人工作驾驶舱</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="header">
+        <h1>个人工作驾驶舱</h1>
+        <button id="refreshBtn">刷新</button>
+      </header>
+      <p id="time" class="time"></p>
+
+      <section class="grid cards" id="cards"></section>
+
+      <section class="panel">
+        <h2>Git 变更（前30条）</h2>
+        <pre id="git"></pre>
+      </section>
+
+      <section class="panel">
+        <h2>最近日志</h2>
+        <div id="logs"></div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
