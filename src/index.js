@@ -14,6 +14,7 @@ const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 const APP_SECRET = process.env.APP_SECRET || 'replace_me';
 const TICK_INTERVAL_SECONDS = Number(process.env.TICK_INTERVAL_SECONDS || 0);
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+const IS_VERCEL = String(process.env.VERCEL || '') === '1';
 
 function now() { return Date.now(); }
 
@@ -69,13 +70,13 @@ app.get('/health', (_, res) => res.json({ ok: true }));
 
 app.get('/api/auth/check', requireAdmin, (_, res) => res.json({ ok: true }));
 
-app.post('/api/leads', requireAdmin, (req, res) => {
+app.post('/api/leads', requireAdmin, async (req, res) => {
   const { name, email, company, source = 'manual', tags = [] } = req.body || {};
   if (!name || !email || !company) {
     return res.status(400).json({ error: 'name/email/company 必填' });
   }
 
-  const db = readDb();
+  const db = await readDb();
   const lead = {
     id: id('lead'), name, email, company, source, tags,
     status: 'active',
@@ -84,34 +85,34 @@ app.post('/api/leads', requireAdmin, (req, res) => {
     nextSendAt: now()
   };
   db.leads.push(lead);
-  writeDb(db);
+  await writeDb(db);
   res.json({ ok: true, lead });
 });
 
-app.get('/api/leads', requireAdmin, (_, res) => {
-  const db = readDb();
+app.get('/api/leads', requireAdmin, async (_, res) => {
+  const db = await readDb();
   res.json(db.leads);
 });
 
-app.get('/api/templates', requireAdmin, (_, res) => {
-  const db = readDb();
+app.get('/api/templates', requireAdmin, async (_, res) => {
+  const db = await readDb();
   res.json(getActiveSequence(db));
 });
 
-app.put('/api/templates', requireAdmin, (req, res) => {
+app.put('/api/templates', requireAdmin, async (req, res) => {
   try {
     const normalized = normalizeTemplates(req.body?.templates ?? req.body);
-    const db = readDb();
+    const db = await readDb();
     db.templates = normalized;
-    writeDb(db);
+    await writeDb(db);
     res.json({ ok: true, templates: normalized });
   } catch (err) {
     res.status(400).json({ error: err.message || 'invalid templates' });
   }
 });
 
-async function runTick() {
-  const db = readDb();
+export async function runTick() {
+  const db = await readDb();
   const active = db.leads.filter(l => l.status === 'active' && l.nextSendAt <= now());
   const currentSequence = getActiveSequence(db);
   let sent = 0;
@@ -162,7 +163,7 @@ async function runTick() {
     }
   }
 
-  writeDb(db);
+  await writeDb(db);
   return { ok: true, sent, dueLeads: active.length };
 }
 
@@ -171,23 +172,23 @@ app.post('/api/tick', requireAdmin, async (_, res) => {
   res.json(result);
 });
 
-app.get('/unsubscribe', (req, res) => {
+app.get('/unsubscribe', async (req, res) => {
   const token = req.query.token;
   if (!token || typeof token !== 'string') return res.status(400).send('invalid');
   const payload = verifyToken(token);
   if (!payload?.leadId) return res.status(400).send('invalid');
 
-  const db = readDb();
+  const db = await readDb();
   const lead = db.leads.find(l => l.id === payload.leadId);
   if (!lead) return res.status(404).send('not found');
 
   lead.status = 'unsubscribed';
-  writeDb(db);
+  await writeDb(db);
   res.send('你已退订，后续不会再收到跟进邮件。');
 });
 
-function buildWeeklyReport() {
-  const db = readDb();
+async function buildWeeklyReport() {
+  const db = await readDb();
   const oneWeek = now() - 7 * 24 * 3600 * 1000;
   const leads = db.leads.filter(l => l.createdAt >= oneWeek).length;
   const mails = db.emailLogs.filter(m => m.sentAt >= oneWeek && !m.error).length;
@@ -201,12 +202,12 @@ function buildWeeklyReport() {
   };
 }
 
-app.get('/api/report/weekly', requireAdmin, (_, res) => {
-  res.json(buildWeeklyReport());
+app.get('/api/report/weekly', requireAdmin, async (_, res) => {
+  res.json(await buildWeeklyReport());
 });
 
-app.get('/api/report/weekly.csv', requireAdmin, (_, res) => {
-  const r = buildWeeklyReport();
+app.get('/api/report/weekly.csv', requireAdmin, async (_, res) => {
+  const r = await buildWeeklyReport();
   const csv = [
     'period,leads,mails,errors,unsubscribed,activeLeads,doneLeads',
     `${r.period},${r.leads},${r.mails},${r.errors},${r.unsubscribed},${r.activeLeads},${r.doneLeads}`
@@ -218,22 +219,26 @@ app.get('/api/report/weekly.csv', requireAdmin, (_, res) => {
 
 app.use(express.static(path.resolve(process.cwd(), 'public')));
 
-app.listen(PORT, () => {
-  console.log(`b2b-mail-mvp running on ${BASE_URL}`);
-  console.log(`health: ${BASE_URL}/health`);
-  console.log(`dashboard: ${BASE_URL}`);
-  if (ADMIN_TOKEN) console.log('admin auth: enabled (x-admin-token required)');
-  if (TICK_INTERVAL_SECONDS > 0) {
-    console.log(`auto tick enabled: every ${TICK_INTERVAL_SECONDS}s`);
-    setInterval(async () => {
-      try {
-        const r = await runTick();
-        if (r.sent > 0 || r.dueLeads > 0) {
-          console.log(`[tick] due=${r.dueLeads}, sent=${r.sent}`);
+if (!IS_VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`b2b-mail-mvp running on ${BASE_URL}`);
+    console.log(`health: ${BASE_URL}/health`);
+    console.log(`dashboard: ${BASE_URL}`);
+    if (ADMIN_TOKEN) console.log('admin auth: enabled (x-admin-token required)');
+    if (TICK_INTERVAL_SECONDS > 0) {
+      console.log(`auto tick enabled: every ${TICK_INTERVAL_SECONDS}s`);
+      setInterval(async () => {
+        try {
+          const r = await runTick();
+          if (r.sent > 0 || r.dueLeads > 0) {
+            console.log(`[tick] due=${r.dueLeads}, sent=${r.sent}`);
+          }
+        } catch (err) {
+          console.error('[tick] failed', err?.message || err);
         }
-      } catch (err) {
-        console.error('[tick] failed', err?.message || err);
-      }
-    }, TICK_INTERVAL_SECONDS * 1000);
-  }
-});
+      }, TICK_INTERVAL_SECONDS * 1000);
+    }
+  });
+}
+
+export default app;
