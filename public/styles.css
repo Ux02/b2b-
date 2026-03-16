@@ -8,6 +8,7 @@ h2 { margin: 0 0 12px; font-size: 18px; }
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 input, button, .btn { border-radius: 8px; border: 1px solid #3c4a78; background: #0e1730; color: #e6eaf2; padding: 10px; }
 button, .btn { cursor: pointer; background: #1d3a8a; border-color: #2f54c4; text-decoration: none; display: inline-block; }
+button.ghost, .btn.ghost { background: transparent; border-color: #3c4a78; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 pre { white-space: pre-wrap; background: #0e1730; border-radius: 8px; padding: 10px; border: 1px solid #3c4a78; }
 table { width: 100%; border-collapse: collapse; }

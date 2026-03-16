@@ -6,6 +6,8 @@
 - 退订链接
 - 周报统计 API + CSV 导出
 - 网页后台（线索录入 / 调度发送 / 数据查看）
+- 基础后台鉴权（ADMIN_TOKEN）
+- 模板后台可编辑（在线改 3 封邮件模板）
 
 ## 1. 安装
 
@@ -15,7 +17,7 @@ npm install
 cp .env.example .env
 ```
 
-填写 `.env` 里的 SMTP 参数。
+填写 `.env` 里的 SMTP 参数，并设置 `ADMIN_TOKEN`（后台登录口令）。
 
 ## 2. 启动
 

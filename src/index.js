@@ -7,12 +7,13 @@ import { sequence, render } from './templates.js';
 import { sendMail } from './mailer.js';
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 const PORT = Number(process.env.PORT || 3030);
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 const APP_SECRET = process.env.APP_SECRET || 'replace_me';
 const TICK_INTERVAL_SECONDS = Number(process.env.TICK_INTERVAL_SECONDS || 0);
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 
 function now() { return Date.now(); }
 
@@ -33,9 +34,42 @@ function verifyToken(token) {
   return JSON.parse(raw);
 }
 
+function requireAdmin(req, res, next) {
+  if (!ADMIN_TOKEN) return next();
+  const token = req.get('x-admin-token') || req.query.token;
+  if (token !== ADMIN_TOKEN) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  next();
+}
+
+function getActiveSequence(db) {
+  return Array.isArray(db.templates) && db.templates.length > 0 ? db.templates : sequence;
+}
+
+function normalizeTemplates(payload) {
+  if (!Array.isArray(payload)) throw new Error('templates must be array');
+  const sorted = payload
+    .map((t, i) => ({
+      step: Number(t.step || i + 1),
+      delayHours: Math.max(0, Number(t.delayHours || 0)),
+      subject: String(t.subject || '').trim(),
+      body: String(t.body || '').trim()
+    }))
+    .sort((a, b) => a.step - b.step);
+
+  if (sorted.length < 1) throw new Error('templates cannot be empty');
+  for (const t of sorted) {
+    if (!t.subject || !t.body) throw new Error('subject/body required');
+  }
+  return sorted;
+}
+
 app.get('/health', (_, res) => res.json({ ok: true }));
 
-app.post('/api/leads', (req, res) => {
+app.get('/api/auth/check', requireAdmin, (_, res) => res.json({ ok: true }));
+
+app.post('/api/leads', requireAdmin, (req, res) => {
   const { name, email, company, source = 'manual', tags = [] } = req.body || {};
   if (!name || !email || !company) {
     return res.status(400).json({ error: 'name/email/company 必填' });
@@ -54,19 +88,37 @@ app.post('/api/leads', (req, res) => {
   res.json({ ok: true, lead });
 });
 
-app.get('/api/leads', (_, res) => {
+app.get('/api/leads', requireAdmin, (_, res) => {
   const db = readDb();
   res.json(db.leads);
+});
+
+app.get('/api/templates', requireAdmin, (_, res) => {
+  const db = readDb();
+  res.json(getActiveSequence(db));
+});
+
+app.put('/api/templates', requireAdmin, (req, res) => {
+  try {
+    const normalized = normalizeTemplates(req.body?.templates ?? req.body);
+    const db = readDb();
+    db.templates = normalized;
+    writeDb(db);
+    res.json({ ok: true, templates: normalized });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'invalid templates' });
+  }
 });
 
 async function runTick() {
   const db = readDb();
   const active = db.leads.filter(l => l.status === 'active' && l.nextSendAt <= now());
+  const currentSequence = getActiveSequence(db);
   let sent = 0;
 
   for (const lead of active) {
     const nextStep = lead.stepSent + 1;
-    const tpl = sequence.find(s => s.step === nextStep);
+    const tpl = currentSequence.find(s => s.step === nextStep);
     if (!tpl) {
       lead.status = 'done';
       continue;
@@ -95,8 +147,8 @@ async function runTick() {
       });
       lead.stepSent = nextStep;
       sent++;
-      lead.nextSendAt = now() + tpl.delayHours * 3600 * 1000;
-      if (nextStep >= sequence.length) lead.status = 'done';
+      lead.nextSendAt = now() + Number(tpl.delayHours || 0) * 3600 * 1000;
+      if (nextStep >= currentSequence.length) lead.status = 'done';
     } catch (err) {
       db.emailLogs.push({
         id: id('mailerr'),
@@ -114,7 +166,7 @@ async function runTick() {
   return { ok: true, sent, dueLeads: active.length };
 }
 
-app.post('/api/tick', async (_, res) => {
+app.post('/api/tick', requireAdmin, async (_, res) => {
   const result = await runTick();
   res.json(result);
 });
@@ -143,21 +195,17 @@ function buildWeeklyReport() {
   const unsubscribed = db.leads.filter(l => l.status === 'unsubscribed').length;
 
   return {
-    period: '7d',
-    leads,
-    mails,
-    errors,
-    unsubscribed,
+    period: '7d', leads, mails, errors, unsubscribed,
     activeLeads: db.leads.filter(l => l.status === 'active').length,
     doneLeads: db.leads.filter(l => l.status === 'done').length
   };
 }
 
-app.get('/api/report/weekly', (_, res) => {
+app.get('/api/report/weekly', requireAdmin, (_, res) => {
   res.json(buildWeeklyReport());
 });
 
-app.get('/api/report/weekly.csv', (_, res) => {
+app.get('/api/report/weekly.csv', requireAdmin, (_, res) => {
   const r = buildWeeklyReport();
   const csv = [
     'period,leads,mails,errors,unsubscribed,activeLeads,doneLeads',
@@ -174,6 +222,7 @@ app.listen(PORT, () => {
   console.log(`b2b-mail-mvp running on ${BASE_URL}`);
   console.log(`health: ${BASE_URL}/health`);
   console.log(`dashboard: ${BASE_URL}`);
+  if (ADMIN_TOKEN) console.log('admin auth: enabled (x-admin-token required)');
   if (TICK_INTERVAL_SECONDS > 0) {
     console.log(`auto tick enabled: every ${TICK_INTERVAL_SECONDS}s`);
     setInterval(async () => {

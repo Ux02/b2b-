@@ -9,9 +9,20 @@
 <body>
   <main class="wrap">
     <h1>B2B 邮件自动化 MVP</h1>
-    <p class="muted">线索录入 · 自动跟进 · 周报统计</p>
+    <p class="muted">线索录入 · 自动跟进 · 周报统计 · 模板后台</p>
 
-    <section class="card">
+    <section class="card" id="authCard">
+      <h2>登录</h2>
+      <p class="muted">请输入后台口令（ADMIN_TOKEN）</p>
+      <div class="row">
+        <input id="tokenInput" placeholder="后台口令" />
+        <button id="saveTokenBtn">保存并登录</button>
+        <button id="clearTokenBtn" class="ghost">退出登录</button>
+      </div>
+      <p id="authMsg" class="muted"></p>
+    </section>
+
+    <section class="card" id="leadCard">
       <h2>新增线索</h2>
       <form id="leadForm" class="grid">
         <input name="name" placeholder="姓名" required />
@@ -24,18 +35,29 @@
       <p id="formMsg" class="muted"></p>
     </section>
 
-    <section class="card row">
+    <section class="card row" id="opsCard">
       <button id="tickBtn">立即执行一次发送调度</button>
       <button id="refreshBtn">刷新数据</button>
-      <a class="btn" href="/api/report/weekly.csv" target="_blank">下载周报 CSV</a>
+      <a class="btn" id="weeklyCsvLink" href="/api/report/weekly.csv" target="_blank">下载周报 CSV</a>
     </section>
 
-    <section class="card">
+    <section class="card" id="templateCard">
+      <h2>模板后台（可编辑）</h2>
+      <p class="muted">支持 {{name}} {{company}} {{sender}} {{senderTitle}}</p>
+      <div id="templateList"></div>
+      <div class="row" style="margin-top:10px;">
+        <button id="saveTplBtn">保存模板</button>
+        <button id="reloadTplBtn" class="ghost">重新加载</button>
+      </div>
+      <p id="tplMsg" class="muted"></p>
+    </section>
+
+    <section class="card" id="reportCard">
       <h2>周报（近 7 天）</h2>
       <pre id="report"></pre>
     </section>
 
-    <section class="card">
+    <section class="card" id="tableCard">
       <h2>线索列表</h2>
       <table>
         <thead>
